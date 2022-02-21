@@ -6,11 +6,11 @@
 LSM6DSO imu;
 
 uint8_t initImu(){
-    if(imu.begin()){
+    if(!imu.begin()){
         return 1;
     }
 
-    if(imu.initialize(BASIC_SETTINGS)){
+    if(!imu.initialize(BASIC_SETTINGS)){
         return 1;
     }
 
