@@ -67,7 +67,7 @@ void align() {
   left_dist = readSensor((TOF_SENSOR)(LEFT_TOF));
   
   // if we're too far from the left wall, pulse the left motor off
-  if (left_dist - TILEWIDTH*leftTiles[turnCount] + TILEGAP > 15) {
+  if (left_dist - (TILEWIDTH*leftTiles[turnCount] + TILEGAP) > 15) {
     pulseMotor(0);
   }
   // if we're too close to the left wall, pulse the right motor off
