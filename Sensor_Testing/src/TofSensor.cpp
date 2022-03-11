@@ -20,8 +20,8 @@
 VL53L1X sensors[SENSOR_COUNT];
 
 //Pin that must be written LOW to disable the sensor. To enable the sensor 
-//leave this pin floating, i.e. set to input. 2, 3 are placeholders
-const uint8_t enPins[] = {13, 2, 3};
+//leave this pin floating, i.e. set to input.
+const uint8_t enPins[] = {8, 7, 4};
 
 //Initialize the time of flight sensors, returns 0 on success
 uint8_t initTofSensors(){
@@ -44,6 +44,7 @@ uint8_t initTofSensors(){
         if(!sensor->init()){
             return 1;
         }
+        Serial.println(i);
 
         //Set each sensor to have a unique address, we will just count up from
         //the default address 0x2A
@@ -51,28 +52,6 @@ uint8_t initTofSensors(){
         sensor->setROISize(FOV, FOV);
         sensor->setDistanceMode(VL53L1X::DistanceMode::Long);
         sensor->setMeasurementTimingBudget(TIME_BUDGET_MS);
-    }
-
-    return 0;
-}
-
-//Read all sensors to an array, returns 0 on success
-uint8_t readAllSensors(uint16_t data[SENSOR_COUNT]){
-    //Trigger an async read on all sensors
-    for(int i = 0; i < SENSOR_COUNT; i++){
-        sensors[i].readSingle(false);
-    }
-
-    //Wait for the readings to finish
-    delay(TIMEOUT_MS);
-
-    //Check if each sensor had a valid reading, if one didn't, return error
-    for(int i = 0; i < SENSOR_COUNT; i++){
-        if(sensors[i].timeoutOccurred()){
-            return 1;
-        }
-
-        data[i] = sensors[i].read(false);
     }
 
     return 0;

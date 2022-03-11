@@ -1,4 +1,3 @@
-#include "src/Log.hpp"
 #include "src/TofSensor.hpp"
 #include "src/ImuSensor.hpp"
 
@@ -14,7 +13,12 @@ void setup()
 	//Set the clock to 400KHz
 	Wire.setClock(400000);
 	//Init the sensors
+	if(initTofSensors()){
+		Serial.println("e");
+	}
+
 	initImu();
+
 }
 
 void loop()
@@ -28,5 +32,15 @@ void loop()
 	Serial.print(", ");
 	Serial.print(data.z);
 	Serial.println(")");
+	delay(20);
+
+	for(int i = 0; i < SENSOR_COUNT; i++){
+		uint16_t data = readSensor((TOF_SENSOR)(SENSOR_1 + i));
+		Serial.print(data);
+		Serial.print("mm ");
+		delay(20);
+	}
+	Serial.println();
+
 	delay(1000);
 }

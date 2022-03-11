@@ -9,4 +9,13 @@
 
 ## Electrical Setup
 
-1. I haven't done this part yet
+The main board with connection markdown is shown below:
+
+![Board Image](Docs/images/board.png)
+
+### Hook-Up Notes
+* When multiple pins are listed, they're listed top-to-bottom, or left-to-right
+  * e.g. The top TOF enable pin would be 8 and the bottom 4
+* The time of flight sensors have an attached harness of 5 wires. One wire on each harness will have a mark, the wire with the mark should be the left-most pin, i.e. closest to the edge of the board.
+* Each motor has 2 wires, each a different color
+  * Colors TBA

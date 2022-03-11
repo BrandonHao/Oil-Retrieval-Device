@@ -9,11 +9,11 @@
 //try to fix.
 // - Brandon 
 
-//Testing with only one sensor for now
+//Rename these sensors if you want
 typedef enum{
     SENSOR_1 = 0,
-    //SENSOR_2,
-    //SENSOR_3,
+    SENSOR_2,
+    SENSOR_3,
     SENSOR_COUNT
 }TOF_SENSOR;
 
