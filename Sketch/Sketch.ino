@@ -11,10 +11,13 @@
 
 // number tiles in the stopping distance per turn
 const uint16_t stoppingTiles = [0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+const uint16_t leftTiles = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2];
 uint16_t turnCount = 0;
 
 imu_data_t gyro_data; 
 int16_t current_angle, delta_time, delta_angle, prev_time, curr_time, sample; 
+
+uint16_t left_dist, right_dist;
 
 void setup() {
 
@@ -59,6 +62,25 @@ void rotate90degrees() {
   }
 }
 
-bool align() {
+void align() {
+  // distance to left wall
+  left_dist = readSensor((TOF_SENSOR)(LEFT_TOF));
   
+  // if we're too far from the left wall, pulse the left motor off
+  if (left_dist - TILEWIDTH*leftTiles[turnCount] + TILEGAP > 15) {
+    pulseMotor(0);
+  }
+  // if we're too close to the left wall, pulse the right motor off
+  else if (left_dist - TILEWIDTH*leftTiles[turnCount] + TILEGAP < -15) {
+    pulseMotor(1);
+  }
+}
+
+void pulseMotor (int rightMotor) {
+  if (rightMotor == 0) {
+    // shut off the left motor for a split second
+  }
+  else {
+    // shut off the right motor for a split second
+  }
 }
