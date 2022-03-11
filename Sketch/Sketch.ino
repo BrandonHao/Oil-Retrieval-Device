@@ -71,7 +71,7 @@ void align() {
     pulseMotor(0);
   }
   // if we're too close to the left wall, pulse the right motor off
-  else if (left_dist - TILEWIDTH*leftTiles[turnCount] + TILEGAP < -15) {
+  else if (left_dist - (TILEWIDTH*leftTiles[turnCount] + TILEGAP) < -15) {
     pulseMotor(1);
   }
 }
