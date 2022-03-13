@@ -68,7 +68,6 @@ void loop() {
 
   // detecting corners to turn at
   if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
-    // TODO: stop motors
     motor_control(STOP);
 
     // exit the program at the end 
@@ -94,7 +93,7 @@ void rotate90degrees() {
     prev_time = curr_time;
     curr_time = millis();
     gyro_data = readGyro(); 
-    sample = data.z;
+    sample = gyro_data.z;
     delta_time = curr_time - prev_time;
     delta_angle = sample*delta_time/1000;
     current_angle += delta_angle;
