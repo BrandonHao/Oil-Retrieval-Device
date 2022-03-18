@@ -1,5 +1,7 @@
-#include "src/TofSensor.cpp"
-#include "src/ImuSensor.cpp"
+#include "source/TofSensor.cpp"
+#include "source/ImuSensor.cpp"
+
+#define SPEC_TESTING 1
 
 #define FRONT_TOF SENSOR_1
 #define LEFT_TOF SENSOR_2
@@ -63,24 +65,36 @@ void setup() {
 }
 
 void loop() {
-  // TODO: start motors
-  motor_control(FORWARD);
+  #ifdef SPEC_TESTING
+  #if SPEC_TESTING == 1
+    spec_test_straight();
+  #elif SPEC_TESTING == 2
+    spec_test_turn();
+  #else
+    spec_test_trap();
+  #endif
+  #endif
 
-  // detecting corners to turn at
-  if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
-    motor_control(STOP);
+  #ifndef SPEC_TESTING
+    // TODO: start motors
+    motor_control(FORWARD);
 
-    // exit the program at the end 
-    if (turnCount == 10) {
-      exit(0);
+    // detecting corners to turn at
+    if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
+      motor_control(STOP);
+
+      // exit the program at the end 
+      if (turnCount == 10) {
+        exit(0);
+      }
+
+      rotate90degrees();
+      turnCount++; 
     }
 
-    rotate90degrees();
-    turnCount++; 
-  }
-  
-  // course correct
-  align();
+    // course correct
+    align();
+  #endif
 }
 
 void rotate90degrees() {
@@ -166,4 +180,29 @@ void motor_control(MOVEMENT movement) {
             analogWrite(MOTOR_2_PIN_1, scale_DC(PULSE_LEFT_DC)); //Might need to adjust based on rotation
             break;
     }
+}
+
+// Straight line test
+void spec_test_straight() {
+  motor_control(FORWARD);
+  align();
+
+  if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
+    motor_control(STOP);
+    delay(30000);
+  }
+}
+
+// Turning test
+void spec_test_turn() {
+  rotate90degrees();
+  delay(30000);
+}
+
+// Trap test
+void spec_test_trap() {
+  motor_control(FORWARD);
+  delay(5000);
+  motor_control(STOP);
+  delay(10000);
 }
