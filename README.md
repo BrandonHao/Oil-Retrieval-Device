@@ -17,5 +17,6 @@ The main board with connection markdown is shown below:
 * When multiple pins are listed, they're listed top-to-bottom, or left-to-right
   * e.g. The top TOF enable pin would be 8 and the bottom 4
 * The time of flight sensors have an attached harness of 5 wires. One wire on each harness will have a mark, the wire with the mark should be the left-most pin, i.e. closest to the edge of the board.
-* Each motor has 2 wires, each a different color
-  * Colors TBA
+  * For the wire harness with a black wire, use the black wire as if it was the marked wire
+* Each motor has 2 wires, one red, and one black
+  * For consistent control the colors should be in the same position in each 2 pin header, e.g. red on the left, black on the right for both motors
