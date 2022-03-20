@@ -1,7 +1,7 @@
 #include "source/TofSensor.cpp"
 #include "source/ImuSensor.cpp"
 
-#define SPEC_TESTING 1
+#define SPEC_TESTING 3
 
 #define FRONT_TOF SENSOR_1
 #define LEFT_TOF SENSOR_2
@@ -12,17 +12,16 @@
 #define TILEGAP 50
 
 // Motor pins
-// Name these forward and back once known
-#define MOTOR_1_PIN_1     10
-#define MOTOR_1_PIN_2     11
-#define MOTOR_2_PIN_1     5
-#define MOTOR_2_PIN_2     6
+#define MOTOR_1_FORWARD   10
+#define MOTOR_1_BACKWARD  11
+#define MOTOR_2_BACKWARD  5
+#define MOTOR_2_FORWARD   6
 
 // Motor duty cycles
-#define FORWARD_DC       50
-#define TURN_90_DC       30
-#define PULSE_RIGHT_DC   60
-#define PULSE_LEFT_DC    60
+#define PWM_MAX     255
+#define FORWARD_DC  (PWM_MAX / 1)
+#define TURN_90_DC  (PWM_MAX / 1)
+#define PULSE_DC    (PWM_MAX / 1.25)
 
 typedef enum{
     STOP = 0,
@@ -58,10 +57,10 @@ void setup() {
   initImu();
 
   //Motor setup
-  pinMode(MOTOR_1_PIN_1, OUTPUT);
-  pinMode(MOTOR_1_PIN_2, OUTPUT);
-  pinMode(MOTOR_1_PIN_1, OUTPUT);
-  pinMode(MOTOR_1_PIN_2, OUTPUT);
+  pinMode(MOTOR_1_FORWARD, OUTPUT);
+  pinMode(MOTOR_1_BACKWARD, OUTPUT);
+  pinMode(MOTOR_2_FORWARD, OUTPUT);
+  pinMode(MOTOR_2_BACKWARD, OUTPUT);
 }
 
 void loop() {
@@ -76,7 +75,7 @@ void loop() {
   #endif
 
   #ifndef SPEC_TESTING
-    // TODO: start motors
+    // Start motors
     motor_control(FORWARD);
 
     // detecting corners to turn at
@@ -103,7 +102,7 @@ void rotate90degrees() {
   // Serial.println("Setting starting angle to 0...");
   current_angle = 0;
   curr_time = millis();
-  while (current_angle > -90) {
+  while (current_angle > -45) {   //TODO: the curent_angle seems to be double the real life angle, check if this is a big problem
     prev_time = curr_time;
     curr_time = millis();
     gyro_data = readGyro(); 
@@ -132,54 +131,41 @@ void align() {
   }
 }
 
-//Could get rid of this depending on if we need a more accurate pulse side to side or not
-uint8_t scale_DC(uint8_t duty_cycle) {
-    //PWM max is 255 so scale the duty cycle to that
-    return 255 * (duty_cycle / 100);
-}
-
-// up speed to turn dont shut off avoid turning it off
 void motor_control(MOVEMENT movement) {
-    switch(movement) {
-        case(STOP):
-            //Stop motors
-            Serial.println("Stopping");
-            digitalWrite(MOTOR_1_PIN_1, LOW);
-            digitalWrite(MOTOR_2_PIN_1, LOW);
-            digitalWrite(MOTOR_1_PIN_2, LOW);
-            digitalWrite(MOTOR_2_PIN_2, LOW);
-            break;
-        case(FORWARD):
-            //Forward motors
-            Serial.println("Forward");
-            analogWrite(MOTOR_1_PIN_1, scale_DC(FORWARD_DC));
-            analogWrite(MOTOR_2_PIN_1, scale_DC(FORWARD_DC));
-            //other direction
-            //analogWrite(MOTOR_1_PIN_2, MOTOR_DUTY_CYCLE);
-            //analogWrite(MOTOR_2_PIN_2, MOTOR_DUTY_CYCLE);
-            break;
-        case(TURN_90):
-            //Turn motors right
-            Serial.println("Turning 90 degrees");
-            analogWrite(MOTOR_1_PIN_1, scale_DC(TURN_90_DC));
-            analogWrite(MOTOR_2_PIN_2, scale_DC(TURN_90_DC));
-            //other direction
-            //analogWrite(MOTOR_1_PIN_2, MOTOR_DUTY_CYCLE);
-            //analogWrite(MOTOR_2_PIN_1, MOTOR_DUTY_CYCLE);
-            break;
-        case(PULSE_RIGHT):
-            //Pulse motors right
-            Serial.println("Adjusting right");
-            analogWrite(MOTOR_1_PIN_1, scale_DC(PULSE_RIGHT_DC)); //Might need to adjust based on rotation
-            analogWrite(MOTOR_2_PIN_1, scale_DC(FORWARD_DC));
-            break;
-        case(PULSE_LEFT):
-            //Pulse motors left
-            Serial.println("Adjusting left");
-            analogWrite(MOTOR_1_PIN_1, scale_DC(FORWARD_DC));
-            analogWrite(MOTOR_2_PIN_1, scale_DC(PULSE_LEFT_DC)); //Might need to adjust based on rotation
-            break;
-    }
+  switch(movement) {
+    case(STOP):
+      // Stop motors
+      Serial.println("Stopping");
+      digitalWrite(MOTOR_1_FORWARD, LOW);
+      digitalWrite(MOTOR_2_FORWARD, LOW);
+      digitalWrite(MOTOR_1_BACKWARD, LOW);
+      digitalWrite(MOTOR_2_BACKWARD, LOW);
+      break;
+    case(FORWARD):
+      // Forward motors
+      Serial.println("Forward");
+      analogWrite(MOTOR_1_BACKWARD, FORWARD_DC);
+      analogWrite(MOTOR_2_BACKWARD, FORWARD_DC);
+      break;
+    case(TURN_90):
+      // Turn motors right
+      Serial.println("Turning 90 degrees");
+      analogWrite(MOTOR_1_BACKWARD, TURN_90_DC);
+      analogWrite(MOTOR_2_FORWARD, TURN_90_DC);
+      break;
+    case(PULSE_RIGHT):    //these pulse directions could be wrong
+      // Pulse motors right
+      Serial.println("Adjusting right");
+      analogWrite(MOTOR_1_FORWARD, PULSE_DC); //Might need to adjust based on rotation
+      analogWrite(MOTOR_2_FORWARD, FORWARD_DC);
+      break;
+    case(PULSE_LEFT):
+      // Pulse motors left
+      Serial.println("Adjusting left");
+      analogWrite(MOTOR_1_FORWARD, FORWARD_DC);
+      analogWrite(MOTOR_2_FORWARD, PULSE_DC); //Might need to adjust based on rotation
+      break;
+  }
 }
 
 // Straight line test
@@ -189,7 +175,7 @@ void spec_test_straight() {
 
   if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
     motor_control(STOP);
-    delay(30000);
+    delay(10000);
   }
 }
 
@@ -202,7 +188,7 @@ void spec_test_turn() {
 // Trap test
 void spec_test_trap() {
   motor_control(FORWARD);
-  delay(5000);
+  delay(4000);
   motor_control(STOP);
-  delay(10000);
+  delay(5000);
 }
