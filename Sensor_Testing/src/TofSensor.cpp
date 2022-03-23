@@ -34,7 +34,7 @@ uint8_t initTofSensors(){
     for(int i = 0; i < SENSOR_COUNT; i++){
         VL53L1X *sensor = &sensors[i];
         //Enable one of the sensors
-        pinMode(enPins[i], INPUT);
+        digitalWrite(enPins[i], HIGH);
         //Wait for it to turn on
         delay(10);
 
