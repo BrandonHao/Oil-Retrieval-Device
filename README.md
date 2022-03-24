@@ -6,6 +6,8 @@
 2. Install the libraries for the sensors using the library manager
    1. [VL53L1X by Pololu](https://github.com/pololu/vl53l1x-arduino)
    2. [SparkFun Qwiic 6DoF - LSM6DS0 by Sparkfun Electronics](https://github.com/sparkfun/SparkFun_Qwiic_6DoF_LSM6DSO_Arduino_Library)
+3. Create your sketch
+4. Copy the `/src` folder from `/Sensor_Testing` to your sketch folder
 
 ## Electrical Setup
 
