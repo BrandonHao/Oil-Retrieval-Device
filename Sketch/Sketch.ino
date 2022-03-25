@@ -1,7 +1,8 @@
 #include "source/TofSensor.cpp"
 #include "source/ImuSensor.cpp"
+#include "source/Heartbeat.cpp"
 
-#define SPEC_TESTING 3
+#define SPEC_TESTING 1
 
 #define FRONT_TOF SENSOR_1
 #define LEFT_TOF SENSOR_2
@@ -9,7 +10,7 @@
 #define IMU 1
 #define TILEWIDTH 305
 // change after mechanical is done
-#define TILEGAP 50
+#define TILEGAP 120  //Too close
 
 // Motor pins
 #define MOTOR_1_FORWARD   10
@@ -19,31 +20,39 @@
 
 // Motor duty cycles
 #define PWM_MAX     255
-#define FORWARD_DC  (PWM_MAX / 1)
+#define FORWARD_DC  (PWM_MAX / 3)
 #define TURN_90_DC  (PWM_MAX / 1)
-#define PULSE_DC    (PWM_MAX / 1.25)
+#define PULSE_DC    (PWM_MAX / 1)
 
 typedef enum{
     STOP = 0,
     FORWARD = 1,
     TURN_90 = 2,
     PULSE_RIGHT = 3,
-    PULSE_LEFT = 4
+    PULSE_LEFT = 4,
+    TURN_CORRECTION = 5
 }MOVEMENT;
 
 // number tiles in the stopping distance per turn
-const uint16_t stoppingTiles[] = {0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2};
-const uint16_t leftTiles[] = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2};
-uint16_t turnCount = 0;
+const uint8_t stoppingTiles[] = {0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2};
+const uint8_t leftTiles[] = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2};
+uint8_t turnCount = 0;
 
-imu_data_t gyro_data; 
-int16_t current_angle, delta_time, delta_angle, prev_time, curr_time, sample; 
+imu_data_t gyro_data;
+float current_angle, delta_angle, sample; 
+uint32_t delta_time, prev_time, curr_time;
 
 uint16_t left_dist, right_dist;
 
 void setup() {
 
   Serial.begin(115200);
+
+	initHeartbeat();
+
+	digitalWrite(A4, LOW);
+	digitalWrite(A5, LOW);
+
   //Initialize the I2C
   Wire.begin();
 
@@ -64,6 +73,8 @@ void setup() {
 }
 
 void loop() {
+	heartbeat();
+
   #ifdef SPEC_TESTING
   #if SPEC_TESTING == 1
     spec_test_straight();
@@ -99,20 +110,21 @@ void loop() {
 void rotate90degrees() {
   motor_control(TURN_90);
 
-  // Serial.println("Setting starting angle to 0...");
+  Serial.println("Setting starting angle to 0...");
   current_angle = 0;
   curr_time = millis();
-  while (current_angle > -45) {   //TODO: the curent_angle seems to be double the real life angle, check if this is a big problem
+  while (current_angle > -44) {   //IDK WHATS HAPPENING HERE NO MAG & BUMPY WHEELE GOT HANDS
     prev_time = curr_time;
-    curr_time = millis();
-    gyro_data = readGyro(); 
-    sample = gyro_data.z;
-    delta_time = curr_time - prev_time;
-    delta_angle = sample*delta_time/1000;
-    current_angle += delta_angle;
-    // Serial.println(current_angle);
+    gyro_data = readGyro();
     delay(25);
+    curr_time = millis();
+    delta_time = curr_time - prev_time;
+    delta_angle = gyro_data.z*delta_time/1000;
+    current_angle += delta_angle;
+    Serial.println(current_angle);
   }
+  motor_control(TURN_CORRECTION);
+  delay(500);
 
   motor_control(STOP);
 }
@@ -122,12 +134,16 @@ void align() {
   left_dist = readSensor((TOF_SENSOR)(LEFT_TOF));
   
   // if we're too far from the left wall, pulse the left motor off
-  if (left_dist - (TILEWIDTH*leftTiles[turnCount] + TILEGAP) > 15) {
+  if (left_dist > 100) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) > 15) {
     motor_control(PULSE_LEFT);
   }
   // if we're too close to the left wall, pulse the right motor off
-  else if (left_dist - (TILEWIDTH*leftTiles[turnCount] + TILEGAP) < -15) {
+  else if (left_dist < 70) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) < -15) {
     motor_control(PULSE_RIGHT);
+  }
+  // else move forward
+  else {
+    motor_control(FORWARD);
   }
 }
 
@@ -150,6 +166,12 @@ void motor_control(MOVEMENT movement) {
     case(TURN_90):
       // Turn motors right
       Serial.println("Turning 90 degrees");
+      analogWrite(MOTOR_1_FORWARD, TURN_90_DC);
+      analogWrite(MOTOR_2_BACKWARD, TURN_90_DC);
+      break;
+    case(TURN_CORRECTION):
+      // Turn motors right
+      Serial.println("Turning 90 degrees");
       analogWrite(MOTOR_1_BACKWARD, TURN_90_DC);
       analogWrite(MOTOR_2_FORWARD, TURN_90_DC);
       break;
@@ -168,14 +190,15 @@ void motor_control(MOVEMENT movement) {
   }
 }
 
+#ifdef SPEC_TESTING
 // Straight line test
 void spec_test_straight() {
-  motor_control(FORWARD);
   align();
 
   if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
     motor_control(STOP);
-    delay(10000);
+    rotate90degrees();
+    delay(30000);
   }
 }
 
@@ -192,3 +215,4 @@ void spec_test_trap() {
   motor_control(STOP);
   delay(5000);
 }
+#endif
