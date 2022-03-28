@@ -5,32 +5,31 @@
 #define SPEC_TESTING 1
 
 #define FRONT_TOF SENSOR_1
-#define LEFT_TOF SENSOR_2
-#define RIGHT_TOF SENSOR_3
+#define LEFT_TOF SENSOR_3
+#define RIGHT_TOF SENSOR_2
 #define IMU 1
 #define TILEWIDTH 305
 // change after mechanical is done
 #define TILEGAP 120  //Too close
 
 // Motor pins
-#define MOTOR_1_FORWARD   10
-#define MOTOR_1_BACKWARD  11
-#define MOTOR_2_BACKWARD  5
-#define MOTOR_2_FORWARD   6
+#define MOTOR_RIGHT_FORWARD   11
+#define MOTOR_RIGHT_BACKWARD  10
+#define MOTOR_LEFT_BACKWARD   6
+#define MOTOR_LEFT_FORWARD    5
 
 // Motor duty cycles
 #define PWM_MAX     255
-#define FORWARD_DC  (PWM_MAX / 3)
-#define TURN_90_DC  (PWM_MAX / 1)
-#define PULSE_DC    (PWM_MAX / 1)
+#define FORWARD_DC  (PWM_MAX / 1)
+#define TURN_90_DC  (PWM_MAX / 4)
+#define PULSE_DC    (PWM_MAX / 1.7)
 
 typedef enum{
     STOP = 0,
     FORWARD = 1,
     TURN_90 = 2,
     PULSE_RIGHT = 3,
-    PULSE_LEFT = 4,
-    TURN_CORRECTION = 5
+    PULSE_LEFT = 4
 }MOVEMENT;
 
 // number tiles in the stopping distance per turn
@@ -40,7 +39,7 @@ uint8_t turnCount = 0;
 
 imu_data_t gyro_data;
 float current_angle, delta_angle, sample; 
-uint32_t delta_time, prev_time, curr_time;
+float delta_time, prev_time, curr_time;
 
 uint16_t left_dist, right_dist;
 
@@ -66,10 +65,10 @@ void setup() {
   initImu();
 
   //Motor setup
-  pinMode(MOTOR_1_FORWARD, OUTPUT);
-  pinMode(MOTOR_1_BACKWARD, OUTPUT);
-  pinMode(MOTOR_2_FORWARD, OUTPUT);
-  pinMode(MOTOR_2_BACKWARD, OUTPUT);
+  pinMode(MOTOR_LEFT_FORWARD, OUTPUT);
+  pinMode(MOTOR_LEFT_BACKWARD, OUTPUT);
+  pinMode(MOTOR_RIGHT_FORWARD, OUTPUT);
+  pinMode(MOTOR_RIGHT_BACKWARD, OUTPUT);
 }
 
 void loop() {
@@ -86,8 +85,6 @@ void loop() {
   #endif
 
   #ifndef SPEC_TESTING
-    // Start motors
-    motor_control(FORWARD);
 
     // detecting corners to turn at
     if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
@@ -112,19 +109,21 @@ void rotate90degrees() {
 
   Serial.println("Setting starting angle to 0...");
   current_angle = 0;
-  curr_time = millis();
-  while (current_angle > -44) {   //IDK WHATS HAPPENING HERE NO MAG & BUMPY WHEELE GOT HANDS
+  curr_time = micros();
+  while (current_angle > -85) {   //IDK WHATS HAPPENING HERE NO MAG & BUMPY WHEELE GOT HANDS
     prev_time = curr_time;
     gyro_data = readGyro();
     delay(25);
-    curr_time = millis();
+    curr_time = micros();
     delta_time = curr_time - prev_time;
-    delta_angle = gyro_data.z*delta_time/1000;
+    delta_angle = ((gyro_data.z + 0.378)*delta_time)/1000000;
     current_angle += delta_angle;
-    Serial.println(current_angle);
+    // Serial.print(current_angle, 6);
+    // Serial.print(" -- ");
+    // Serial.print(delta_time);
+    // Serial.print(" --- ");
+    // Serial.println(gyro_data.z, 5);
   }
-  motor_control(TURN_CORRECTION);
-  delay(500);
 
   motor_control(STOP);
 }
@@ -134,11 +133,11 @@ void align() {
   left_dist = readSensor((TOF_SENSOR)(LEFT_TOF));
   
   // if we're too far from the left wall, pulse the left motor off
-  if (left_dist > 100) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) > 15) {
+  if (left_dist > 115) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) > 15) {
     motor_control(PULSE_LEFT);
   }
   // if we're too close to the left wall, pulse the right motor off
-  else if (left_dist < 70) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) < -15) {
+  else if (left_dist < 115) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) < -15) {
     motor_control(PULSE_RIGHT);
   }
   // else move forward
@@ -152,40 +151,34 @@ void motor_control(MOVEMENT movement) {
     case(STOP):
       // Stop motors
       Serial.println("Stopping");
-      digitalWrite(MOTOR_1_FORWARD, LOW);
-      digitalWrite(MOTOR_2_FORWARD, LOW);
-      digitalWrite(MOTOR_1_BACKWARD, LOW);
-      digitalWrite(MOTOR_2_BACKWARD, LOW);
+      digitalWrite(MOTOR_LEFT_FORWARD, LOW);
+      digitalWrite(MOTOR_RIGHT_FORWARD, LOW);
+      digitalWrite(MOTOR_LEFT_BACKWARD, LOW);
+      digitalWrite(MOTOR_RIGHT_BACKWARD, LOW);
       break;
     case(FORWARD):
       // Forward motors
       Serial.println("Forward");
-      analogWrite(MOTOR_1_BACKWARD, FORWARD_DC);
-      analogWrite(MOTOR_2_BACKWARD, FORWARD_DC);
+      analogWrite(MOTOR_LEFT_FORWARD, FORWARD_DC);
+      analogWrite(MOTOR_RIGHT_FORWARD, FORWARD_DC);
       break;
     case(TURN_90):
       // Turn motors right
       Serial.println("Turning 90 degrees");
-      analogWrite(MOTOR_1_FORWARD, TURN_90_DC);
-      analogWrite(MOTOR_2_BACKWARD, TURN_90_DC);
+      analogWrite(MOTOR_LEFT_FORWARD, TURN_90_DC);
+      analogWrite(MOTOR_RIGHT_FORWARD, TURN_90_DC);
       break;
-    case(TURN_CORRECTION):
-      // Turn motors right
-      Serial.println("Turning 90 degrees");
-      analogWrite(MOTOR_1_BACKWARD, TURN_90_DC);
-      analogWrite(MOTOR_2_FORWARD, TURN_90_DC);
-      break;
-    case(PULSE_RIGHT):    //these pulse directions could be wrong
+    case(PULSE_LEFT):    //these pulse directions could be wrong
       // Pulse motors right
       Serial.println("Adjusting right");
-      analogWrite(MOTOR_1_FORWARD, PULSE_DC); //Might need to adjust based on rotation
-      analogWrite(MOTOR_2_FORWARD, FORWARD_DC);
+      analogWrite(MOTOR_LEFT_FORWARD, PULSE_DC); //Might need to adjust based on rotation
+      analogWrite(MOTOR_RIGHT_FORWARD, FORWARD_DC);
       break;
-    case(PULSE_LEFT):
+    case(PULSE_RIGHT):
       // Pulse motors left
       Serial.println("Adjusting left");
-      analogWrite(MOTOR_1_FORWARD, FORWARD_DC);
-      analogWrite(MOTOR_2_FORWARD, PULSE_DC); //Might need to adjust based on rotation
+      analogWrite(MOTOR_LEFT_FORWARD, FORWARD_DC);
+      analogWrite(MOTOR_RIGHT_FORWARD, PULSE_DC); //Might need to adjust based on rotation
       break;
   }
 }
@@ -197,7 +190,7 @@ void spec_test_straight() {
 
   if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
     motor_control(STOP);
-    rotate90degrees();
+    //rotate90degrees();
     delay(30000);
   }
 }
