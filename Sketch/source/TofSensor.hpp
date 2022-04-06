@@ -13,15 +13,16 @@
 typedef enum{
     SENSOR_1 = 0,
     SENSOR_2,
-    SENSOR_3,
     SENSOR_COUNT
 }TOF_SENSOR;
 
 //Initialize the time of flight sensors, returns 0 on success
 uint8_t initTofSensors();
 
+void resetTof();
+
 //Read all sensors to an array, returns 0 on success
-uint8_t readAllSensors(uint16_t data[3]);
+uint8_t readAllSensors(uint16_t data[2]);
 
 //Read the specified sensor
 uint16_t readSensor(TOF_SENSOR sensor);

@@ -1,16 +1,21 @@
+#include <PID_v1.h>
+#include <RunningAverage.h>
+#include "TimerOne.h"
 #include "source/TofSensor.cpp"
 #include "source/ImuSensor.cpp"
 #include "source/Heartbeat.cpp"
 
-#define SPEC_TESTING 1
+// #define SPEC_TESTING 4
 
+// Sensors
 #define FRONT_TOF SENSOR_1
-#define LEFT_TOF SENSOR_3
-#define RIGHT_TOF SENSOR_2
+#define LEFT_TOF SENSOR_2
 #define IMU 1
-#define TILEWIDTH 305
-// change after mechanical is done
-#define TILEGAP 120  //Too close
+
+// Physical dimentions
+#define TILE_WIDTH    305
+#define LEFT_GAP      110
+#define FRONT_GAP     180
 
 // Motor pins
 #define MOTOR_RIGHT_FORWARD   11
@@ -19,52 +24,63 @@
 #define MOTOR_LEFT_FORWARD    5
 
 // Motor duty cycles
-#define PWM_MAX     255
-#define FORWARD_DC  (PWM_MAX / 1)
-#define TURN_90_DC  (PWM_MAX / 4)
-#define PULSE_DC    (PWM_MAX / 1.7)
+#define PWM_MAX           255
+#define FORWARD_RIGHT_DC  (PWM_MAX / 1)
+#define FORWARD_LEFT_DC   (PWM_MAX / 1.02)
+#define TURN_90_DC        (PWM_MAX / 2)
 
 typedef enum{
     STOP = 0,
     FORWARD = 1,
     TURN_90 = 2,
-    PULSE_RIGHT = 3,
-    PULSE_LEFT = 4
+    BACKWARD = 5
 }MOVEMENT;
 
-// number tiles in the stopping distance per turn
+
+// Course path variables
 const uint8_t stoppingTiles[] = {0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2};
 const uint8_t leftTiles[] = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2};
 uint8_t turnCount = 0;
 
+// Angle calculation variables
 imu_data_t gyro_data;
 float current_angle, delta_angle, sample; 
 float delta_time, prev_time, curr_time;
 
-uint16_t left_dist, right_dist;
+// Testing variables
+RunningAverage ringBuf(50);
+
+// PID variables
+double Setpoint, Input, Output;
+PID myPID(&Input, &Output, &Setpoint,5,0,3, DIRECT);
+
+long turnDetectionFreeze = 0;
 
 void setup() {
-
   Serial.begin(115200);
 
+  // Start heartbeat
 	initHeartbeat();
-
 	digitalWrite(A4, LOW);
 	digitalWrite(A5, LOW);
 
-  //Initialize the I2C
+  // Initialize the I2C
   Wire.begin();
+  Wire.setWireTimeout(100000, true);
+  Wire.setClock(50000);
 
-  //Set the clock to 400KHz
-  Wire.setClock(400000);
-  //Init the sensors
+  // Initialize the sensors
   if(initTofSensors()){
     Serial.println("e");
   }
-
   initImu();
 
-  //Motor setup
+  // Configure PID
+  Setpoint = 0;
+  myPID.SetMode(AUTOMATIC);
+  myPID.SetOutputLimits(-51, 51);
+
+  // Setup motors
   pinMode(MOTOR_LEFT_FORWARD, OUTPUT);
   pinMode(MOTOR_LEFT_BACKWARD, OUTPUT);
   pinMode(MOTOR_RIGHT_FORWARD, OUTPUT);
@@ -79,27 +95,39 @@ void loop() {
     spec_test_straight();
   #elif SPEC_TESTING == 2
     spec_test_turn();
-  #else
+  #elif SPEC_TESTING == 3
     spec_test_trap();
+  #else
+    general_testing();
   #endif
   #endif
 
   #ifndef SPEC_TESTING
+    // Dont turn when tilted into the traps
+    if((readGyro().x >= 30 && turnCount < 4) || (readGyro().x >= 22 && turnCount >= 4)){
+      turnDetectionFreeze = millis();
+    }
 
-    // detecting corners to turn at
-    if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
+    // Turn at the right distance unless going into a trap
+    if (((millis()- turnDetectionFreeze > 450 && turnCount < 4) || (millis()- turnDetectionFreeze > 350 && turnCount >= 4)) && readSensor(FRONT_TOF) < TILE_WIDTH*stoppingTiles[turnCount] + FRONT_GAP) {
+      // Stop in place
+      motor_control(STOP);
+      motor_control(BACKWARD);
+      delay(100);
       motor_control(STOP);
 
-      // exit the program at the end 
+      // Exit the program at the end 
       if (turnCount == 10) {
         exit(0);
       }
 
+      // Turn
       rotate90degrees();
+      turnDetectionFreeze = millis();
       turnCount++; 
     }
 
-    // course correct
+    // Course correct to follow a straight line
     align();
   #endif
 }
@@ -107,50 +135,36 @@ void loop() {
 void rotate90degrees() {
   motor_control(TURN_90);
 
-  Serial.println("Setting starting angle to 0...");
   current_angle = 0;
   curr_time = micros();
-  while (current_angle > -85) {   //IDK WHATS HAPPENING HERE NO MAG & BUMPY WHEELE GOT HANDS
+
+  while (current_angle > -80) {   // Will turn about 90 deg, the IMU inaccuracy and momentum give about 10 degrees
     prev_time = curr_time;
     gyro_data = readGyro();
-    delay(25);
+    delay(20);
     curr_time = micros();
     delta_time = curr_time - prev_time;
-    delta_angle = ((gyro_data.z + 0.378)*delta_time)/1000000;
+    delta_angle = ((gyro_data.z + 0.378)*delta_time)/1000000.0;
     current_angle += delta_angle;
-    // Serial.print(current_angle, 6);
-    // Serial.print(" -- ");
-    // Serial.print(delta_time);
-    // Serial.print(" --- ");
-    // Serial.println(gyro_data.z, 5);
   }
 
   motor_control(STOP);
 }
 
 void align() {
-  // distance to left wall
-  left_dist = readSensor((TOF_SENSOR)(LEFT_TOF));
-  
-  // if we're too far from the left wall, pulse the left motor off
-  if (left_dist > 115) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) > 15) {
-    motor_control(PULSE_LEFT);
-  }
-  // if we're too close to the left wall, pulse the right motor off
-  else if (left_dist < 115) {//- (TILEWIDTH*leftTiles[turnCount] + TILEGAP) < -15) {
-    motor_control(PULSE_RIGHT);
-  }
-  // else move forward
-  else {
-    motor_control(FORWARD);
-  }
+  // Compute PID based on TOF readings
+  Input = (double)readSensor((TOF_SENSOR)(LEFT_TOF)) - (TILE_WIDTH*leftTiles[turnCount] + LEFT_GAP);
+  myPID.Compute();
+
+  // Use the result to change the motor power
+  analogWrite(MOTOR_LEFT_FORWARD, 204 + Output);
+  analogWrite(MOTOR_RIGHT_FORWARD, 204 - Output);
 }
 
 void motor_control(MOVEMENT movement) {
   switch(movement) {
     case(STOP):
       // Stop motors
-      Serial.println("Stopping");
       digitalWrite(MOTOR_LEFT_FORWARD, LOW);
       digitalWrite(MOTOR_RIGHT_FORWARD, LOW);
       digitalWrite(MOTOR_LEFT_BACKWARD, LOW);
@@ -158,27 +172,18 @@ void motor_control(MOVEMENT movement) {
       break;
     case(FORWARD):
       // Forward motors
-      Serial.println("Forward");
-      analogWrite(MOTOR_LEFT_FORWARD, FORWARD_DC);
-      analogWrite(MOTOR_RIGHT_FORWARD, FORWARD_DC);
+      analogWrite(MOTOR_LEFT_FORWARD, FORWARD_LEFT_DC);
+      analogWrite(MOTOR_RIGHT_FORWARD, FORWARD_RIGHT_DC);
+      break;
+    case(BACKWARD):
+      // Forward motors
+      analogWrite(MOTOR_LEFT_BACKWARD, FORWARD_LEFT_DC);
+      analogWrite(MOTOR_RIGHT_BACKWARD, FORWARD_RIGHT_DC);
       break;
     case(TURN_90):
       // Turn motors right
-      Serial.println("Turning 90 degrees");
       analogWrite(MOTOR_LEFT_FORWARD, TURN_90_DC);
-      analogWrite(MOTOR_RIGHT_FORWARD, TURN_90_DC);
-      break;
-    case(PULSE_LEFT):    //these pulse directions could be wrong
-      // Pulse motors right
-      Serial.println("Adjusting right");
-      analogWrite(MOTOR_LEFT_FORWARD, PULSE_DC); //Might need to adjust based on rotation
-      analogWrite(MOTOR_RIGHT_FORWARD, FORWARD_DC);
-      break;
-    case(PULSE_RIGHT):
-      // Pulse motors left
-      Serial.println("Adjusting left");
-      analogWrite(MOTOR_LEFT_FORWARD, FORWARD_DC);
-      analogWrite(MOTOR_RIGHT_FORWARD, PULSE_DC); //Might need to adjust based on rotation
+      analogWrite(MOTOR_RIGHT_BACKWARD, TURN_90_DC);
       break;
   }
 }
@@ -188,9 +193,9 @@ void motor_control(MOVEMENT movement) {
 void spec_test_straight() {
   align();
 
-  if (readSensor(FRONT_TOF) < TILEWIDTH*stoppingTiles[turnCount] + TILEGAP) {
+  if (readSensor(FRONT_TOF) < TILE_WIDTH*stoppingTiles[turnCount] + FRONT_GAP) {
     motor_control(STOP);
-    //rotate90degrees();
+    // rotate90degrees();
     delay(30000);
   }
 }
@@ -207,5 +212,19 @@ void spec_test_trap() {
   delay(4000);
   motor_control(STOP);
   delay(5000);
+}
+
+// Get the max and min of a stream of readings
+void general_testing(){
+  gyro_data = readGyro();
+  delay(20);
+  ringBuf.addValue(readSensor(FRONT_TOF));
+
+  Serial.print(":");
+  Serial.print(ringBuf.getMax());
+  Serial.print(" - ");
+  Serial.println(ringBuf.getMin());
+  // Serial.print(" --- ");
+  // Serial.println(gyro_data.z, 5);
 }
 #endif

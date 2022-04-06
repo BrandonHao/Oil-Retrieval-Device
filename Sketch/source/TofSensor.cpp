@@ -11,17 +11,17 @@
 #define FOV             16
 
 //The total amount of time between the start of each reading
-#define TIMEOUT_MS      40
+#define TIMEOUT_MS      100
 
 //The amount of time that the sensor can use to actually read the distance
-#define TIME_BUDGET_MS  33
+#define TIME_BUDGET_MS  50
 
 
 VL53L1X sensors[SENSOR_COUNT];
 
 //Pin that must be written LOW to disable the sensor. To enable the sensor 
 //leave this pin floating, i.e. set to input.
-const uint8_t enPins[] = {8, 7, 4};
+const uint8_t enPins[] = {8, 7};
 
 //Initialize the time of flight sensors, returns 0 on success
 uint8_t initTofSensors(){
@@ -34,7 +34,7 @@ uint8_t initTofSensors(){
     for(int i = 0; i < SENSOR_COUNT; i++){
         VL53L1X *sensor = &sensors[i];
         //Enable one of the sensors
-        pinMode(enPins[i], INPUT);
+        digitalWrite(enPins[i], HIGH);
         //Wait for it to turn on
         delay(10);
 
@@ -55,6 +55,12 @@ uint8_t initTofSensors(){
     }
 
     return 0;
+}
+
+void resetTof(){
+    for(int i = 0; i < SENSOR_COUNT; i++){
+        digitalWrite(enPins[i], LOW);
+    }
 }
 
 //Read the specified sensor, if the reading is 0, it probably failed

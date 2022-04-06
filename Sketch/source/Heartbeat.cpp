@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 //Heartbeat interval in milliseconds
-#define BEAT_INTERVAL   1000
+#define BEAT_INTERVAL   500
 
 uint32_t time;
 
